@@ -19,7 +19,7 @@ export class ServerErrorTracker {
   private crashAttempts: Map<string, number> = new Map();
 
   // Default max attempts before marking as ERROR (fallback if config is not available)
-  private readonly fallbackMaxAttempts: number = 1;
+  private readonly fallbackMaxAttempts: number = 3;
 
   // Server-specific max attempts (can be configured per server)
   private serverMaxAttempts: Map<string, number> = new Map();
