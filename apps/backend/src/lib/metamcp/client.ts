@@ -181,16 +181,15 @@ export const connectMetaMcpClient = async (
     let client: Client | undefined;
 
     try {
-      // Check if server is already in error state before attempting connection
-      const isInErrorState = await serverErrorTracker.isServerInErrorState(
+      // Remember whether this server was previously flagged ERROR. We used to
+      // return early here, which turned ERROR into a one-way trapdoor: a server
+      // that had since recovered could never reconnect, so it could never clear
+      // the flag — only a manual UI edit/save would. Instead, attempt the
+      // connection and, on success, clear the flag below. If it genuinely keeps
+      // crashing, the crash tracker re-flags it.
+      const wasInErrorState = await serverErrorTracker.isServerInErrorState(
         serverParams.uuid,
       );
-      if (isInErrorState) {
-        logger.info(
-          `Server ${serverParams.name} (${serverParams.uuid}) is already in ERROR state, skipping connection attempt`,
-        );
-        return undefined;
-      }
 
       // Create fresh client and transport for each attempt
       const result = createMetaMcpClient(serverParams);
@@ -226,6 +225,15 @@ export const connectMetaMcpClient = async (
       }
 
       await client.connect(transport);
+
+      // Connection succeeded — self-heal any prior ERROR state so a recovered
+      // server isn't left flagged red forever.
+      if (wasInErrorState) {
+        logger.info(
+          `Server ${serverParams.name} (${serverParams.uuid}) reconnected successfully; clearing prior ERROR state.`,
+        );
+        await serverErrorTracker.resetServerErrorState(serverParams.uuid);
+      }
 
       return {
         client,
