@@ -186,6 +186,25 @@ export class McpServerPool {
       return undefined;
     }
 
+    // Self-heal transient ERROR state. A successful connection means the
+    // server came back up, so clear any prior crash flag. Without this, a
+    // single transient crash leaves the server stuck as ERROR forever:
+    // MCP_MAX_ATTEMPTS defaults to 1, crash attempts never decay, and the
+    // only other reset path is a manual edit/save in the UI. This commonly
+    // bites STDIO servers launched via `uvx <pkg>@latest`, where the first
+    // spawn after a version bump pays a cold-cache install and may be killed
+    // before it finishes. Guard the DB write so steady-state reconnects of a
+    // healthy server don't touch the database on every connection.
+    if (
+      serverErrorTracker.getServerAttempts(params.uuid) > 0 ||
+      (await serverErrorTracker.isServerInErrorState(params.uuid))
+    ) {
+      logger.info(
+        `Connection succeeded for server ${params.name} (${params.uuid}); clearing prior error state.`,
+      );
+      await this.resetServerErrorState(params.uuid);
+    }
+
     return connectedClient;
   }
 
