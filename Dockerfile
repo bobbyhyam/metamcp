@@ -48,9 +48,15 @@ COPY . .
 # Build all packages and apps
 RUN pnpm build
 
-RUN sed -i -e "s/30000/600000/" \
-    "node_modules/.pnpm/next@15.5.12_react-dom@19.1.2_react@19.1.2__react@19.1.2/node_modules/next/dist/server/lib/router-utils/proxy-request.js" \
-    "node_modules/.pnpm/next@15.5.12_react-dom@19.1.2_react@19.1.2__react@19.1.2/node_modules/next/dist/esm/server/lib/router-utils/proxy-request.js"
+# Bump Next.js dev proxy timeout 30s -> 600s. The pnpm store dir for `next`
+# embeds the resolved react/react-dom versions, so we glob it instead of
+# hardcoding (a hardcoded path silently breaks on every react/next bump).
+RUN found=0; \
+    for f in node_modules/.pnpm/next@*/node_modules/next/dist/server/lib/router-utils/proxy-request.js \
+             node_modules/.pnpm/next@*/node_modules/next/dist/esm/server/lib/router-utils/proxy-request.js; do \
+      if [ -f "$f" ]; then sed -i -e "s/30000/600000/" "$f"; found=1; fi; \
+    done; \
+    if [ "$found" = 0 ]; then echo "WARN: next proxy-request.js not found; timeout patch skipped"; fi
 
 # Production runner stage
 FROM base AS runner
