@@ -95,8 +95,12 @@ COPY --from=builder --chown=nextjs:nodejs /app/pnpm-workspace.yaml ./
 # Install production dependencies only.
 # pnpm >=10 refuses to purge the copied node_modules without a TTY
 # (ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY) during a non-interactive Docker
-# build; auto-confirm the purge via the pnpm_config_ env override.
-ENV pnpm_config_confirm_modules_purge=false
+# build. Disable the purge confirmation: pnpm v10 reads npm_config_*, v11 reads
+# pnpm_config_* (set both), and CI=true makes pnpm treat the build as
+# non-interactive as a backstop.
+ENV CI=true \
+    npm_config_confirm_modules_purge=false \
+    pnpm_config_confirm_modules_purge=false
 RUN pnpm install --prod
 
 # Install drizzle-kit locally in backend for migrations
