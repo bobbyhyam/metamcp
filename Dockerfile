@@ -103,8 +103,11 @@ ENV CI=true \
     pnpm_config_confirm_modules_purge=false
 RUN pnpm install --prod
 
-# Install drizzle-kit locally in backend for migrations
-RUN cd apps/backend && pnpm add drizzle-kit@0.31.1
+# Install drizzle-kit locally in backend for migrations.
+# --prod keeps the install scoped to the same dependency set the prod prune
+# above produced; a bare `pnpm add` would try to reinstate devDependencies and
+# pnpm v10 rejects the mismatch (ERR_PNPM_INCLUDED_DEPS_CONFLICT).
+RUN cd apps/backend && pnpm add drizzle-kit@0.31.1 --prod
 
 # Copy startup script
 COPY --chown=nextjs:nodejs docker-entrypoint.sh ./
