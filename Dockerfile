@@ -92,7 +92,11 @@ COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./
 COPY --from=builder --chown=nextjs:nodejs /app/pnpm-workspace.yaml ./
 
-# Install production dependencies only
+# Install production dependencies only.
+# pnpm >=10 refuses to purge the copied node_modules without a TTY
+# (ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY) during a non-interactive Docker
+# build; auto-confirm the purge via the pnpm_config_ env override.
+ENV pnpm_config_confirm_modules_purge=false
 RUN pnpm install --prod
 
 # Install drizzle-kit locally in backend for migrations
