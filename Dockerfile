@@ -92,22 +92,27 @@ COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./
 COPY --from=builder --chown=nextjs:nodejs /app/pnpm-workspace.yaml ./
 
+# drizzle-kit is a backend devDependency but is required at runtime for
+# `pnpm exec drizzle-kit migrate` (see docker-entrypoint.sh). `pnpm install --prod`
+# prunes devDependencies, so promote it to a prod dependency first; the prod
+# install below then keeps it and links its bin. (A separate `pnpm add
+# drizzle-kit --prod` no-ops because it is an already-satisfied devDep, leaving
+# no binary and breaking migrations at startup.)
+RUN cd apps/backend \
+    && pnpm pkg set dependencies.drizzle-kit="^0.31.1" \
+    && pnpm pkg delete devDependencies.drizzle-kit
+
 # Install production dependencies only.
 # pnpm >=10 refuses to purge the copied node_modules without a TTY
 # (ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY) during a non-interactive Docker
 # build. Disable the purge confirmation: pnpm v10 reads npm_config_*, v11 reads
 # pnpm_config_* (set both), and CI=true makes pnpm treat the build as
-# non-interactive as a backstop.
+# non-interactive. --no-frozen-lockfile lets pnpm reconcile the drizzle-kit
+# promotion above.
 ENV CI=true \
     npm_config_confirm_modules_purge=false \
     pnpm_config_confirm_modules_purge=false
-RUN pnpm install --prod
-
-# Install drizzle-kit locally in backend for migrations.
-# --prod keeps the install scoped to the same dependency set the prod prune
-# above produced; a bare `pnpm add` would try to reinstate devDependencies and
-# pnpm v10 rejects the mismatch (ERR_PNPM_INCLUDED_DEPS_CONFLICT).
-RUN cd apps/backend && pnpm add drizzle-kit@0.31.1 --prod
+RUN pnpm install --prod --no-frozen-lockfile
 
 # Copy startup script
 COPY --chown=nextjs:nodejs docker-entrypoint.sh ./
